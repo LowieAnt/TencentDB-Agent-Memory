@@ -24,15 +24,21 @@ export interface FetchResult {
  *   3. 返回版本标识
  *
  * 实现：
- *   - GitSourceFetcher：simple-git，第一版仅 public HTTPS（SSH/私有仓库鉴权见文档 005）
+ *   - GitSourceFetcher：simple-git，支持 HTTPS 公开与私有仓库（credential 参数传 PAT）；SSH 暂不支持
  *   - LocalSourceFetcher / FtpSourceFetcher：未来扩展
  */
 export interface ISourceFetcher {
-  /** 首次拉取：把源码下载到 localPath。 */
-  fetch(sourceUrl: string, branch: string, localPath: string): Promise<FetchResult>;
+  /**
+   * 首次拉取：把源码下载到 localPath。
+   * @param credential 私有仓库凭据（明文 PAT，已由调用方解密）；公开仓库不传。
+   */
+  fetch(sourceUrl: string, branch: string, localPath: string, credential?: string): Promise<FetchResult>;
 
-  /** 增量同步：更新已存在的 localPath 到最新版本。 */
-  sync(sourceUrl: string, branch: string, localPath: string): Promise<FetchResult>;
+  /**
+   * 增量同步：更新已存在的 localPath 到最新版本。
+   * @param credential 私有仓库凭据（明文 PAT，已由调用方解密）；公开仓库不传。
+   */
+  sync(sourceUrl: string, branch: string, localPath: string, credential?: string): Promise<FetchResult>;
 
   /** 校验 sourceUrl 是否合法（协议白名单 + SSRF 防护）。非法则 throw。 */
   validate(sourceUrl: string): void;

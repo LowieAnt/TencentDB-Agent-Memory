@@ -24,6 +24,8 @@ export const knowledgeCodeGraph = sqliteTable(
     repoName: text("repo_name").notNull().default(""),
     repoUrl: text("repo_url").notNull(),
     branch: text("branch").notNull(),
+    /** AES-256-GCM 加密后的私有仓库 PAT（`iv:authTag:ciphertext`），公开仓库为 null。 */
+    credential: text("credential"),
     commitHash: text("commit_hash"),
     ownerUserId: text("owner_user_id"),
     userId: text("user_id"),

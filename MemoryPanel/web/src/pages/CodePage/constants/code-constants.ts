@@ -10,12 +10,13 @@ export { formatShortTime } from '@/lib/asset-common';
 
 /**
  * 校验是否为合法的 HTTP(S) Git 仓库地址（正则匹配）。
- * 要求：http/https 协议、host 含点（真实域名）、路径不含空格且以 .git 结尾。
- * 用正则而非 URL 解析 —— new URL() 会接受路径中的空格（如 /a b/repo.git），
- * 且不强制 .git 后缀，均不符合 code graph 注册的严格约束。
+ * 要求：http/https 协议、host 含点（真实域名）、路径不含空格。
+ * 用正则而非 URL 解析 —— new URL() 会接受路径中的空格（如 /a b/repo.git）。
+ * 不强制 .git 后缀 —— Azure DevOps（https://dev.azure.com/org/project/_git/repo）
+ * 等平台的克隆地址本就不带 .git 后缀。
  * SSH（git@...）不在此判定为 true —— 由调用方单独提示"暂不支持 SSH"。
  */
-const GIT_HTTP_URL_RE = /^https?:\/\/[^\s/]+\.[^\s/]+\/[^\s]+\.git$/i;
+const GIT_HTTP_URL_RE = /^https?:\/\/[^\s/]+\.[^\s/]+\/[^\s]+$/i;
 export function isValidGitHttpUrl(raw: string): boolean {
   return GIT_HTTP_URL_RE.test(raw.trim());
 }
@@ -28,6 +29,10 @@ export function isValidGitHttpUrl(raw: string): boolean {
  *   https://gitlab.example.com/namespace/repo.git → namespace/repo
  *   https://github.com/org/project.git → org/project
  *   https://git.woa.com/group/sub/repo.git → sub/repo
+ * Azure DevOps 的路径形如 /org/project/_git/repo —— `_git` 是固定分隔符而非
+ * namespace，取其前后两段（project/repo）而非直接取最后两段（否则会显示
+ * 成 `_git/repo`）：
+ *   https://dev.azure.com/org/project/_git/repo → project/repo
  * 如果只有一段路径，直接返回该段（去掉 .git 后缀）。
  * 解析失败时返回原始 URL（保底）。
  */
@@ -38,6 +43,10 @@ export function formatRepoName(repoName: string, repoUrl: string): string {
   try {
     const parsed = new URL(url);
     const segments = parsed.pathname.replace(/\.git$/, '').split('/').filter(Boolean);
+    const gitIdx = segments.indexOf('_git');
+    if (gitIdx > 0 && gitIdx === segments.length - 2) {
+      return `${segments[gitIdx - 1]}/${segments[gitIdx + 1]}`;
+    }
     if (segments.length >= 2) return `${segments[segments.length - 2]}/${segments[segments.length - 1]}`;
     if (segments.length === 1) return segments[0];
   } catch {

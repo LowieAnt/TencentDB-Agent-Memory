@@ -34,6 +34,8 @@ export interface CodeGraphRow {
   repo_name: string;
   repo_url: string;
   branch: string;
+  /** AES-256-GCM 加密后的私有仓库凭据（`iv:authTag:ciphertext`），公开仓库为 null。 */
+  credential: string | null;
   commit_hash: string | null;
   owner_user_id: string | null;
   user_id: string | null;
@@ -58,6 +60,8 @@ export interface CreateCodeGraphInput {
   team_id: string;
   repo_url: string;
   branch: string;
+  /** 已加密的私有仓库凭据（调用方需先用 encryptCredential 加密），公开仓库不传。 */
+  credential?: string;
   repo_name?: string;
   owner_user_id?: string;
   user_id?: string;

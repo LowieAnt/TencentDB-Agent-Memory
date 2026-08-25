@@ -55,11 +55,9 @@ export class GitSourceFetcher implements ISourceFetcher {
   }
 
   validate(sourceUrl: string): void {
-    // 第一版：仅支持 public HTTPS 仓库（SSH / 私有仓库鉴权见文档 005）。
+    // 仅支持 HTTPS 仓库（公开或私有，私有仓库鉴权见 fetch/sync 的 credential 参数）；SSH 暂不支持。
     if (!sourceUrl.startsWith("https://")) {
-      throw new Error(
-        "first version only supports public HTTPS repos; SSH/private repo support coming soon",
-      );
+      throw new Error("only HTTPS repos are supported; SSH is not supported");
     }
     const host = this.extractHost(sourceUrl);
     if (!host) {
@@ -71,32 +69,78 @@ export class GitSourceFetcher implements ISourceFetcher {
     }
   }
 
-  async fetch(sourceUrl: string, branch: string, localPath: string): Promise<FetchResult> {
+  async fetch(sourceUrl: string, branch: string, localPath: string, credential?: string): Promise<FetchResult> {
     this.validate(sourceUrl);
-    // 浅克隆单分支。注：git clone/fetch 不会拉取远端的 .git/hooks（hooks 是本地态），
-    // 所以正常仓库 clone 出来不带可执行钩子；此处不再配置 core.hooksPath
-    // （加固版 git 会拒绝该配置：需 allowUnsafeHooksPath）。
-    await simpleGit().clone(sourceUrl, localPath, {
-      "--depth": 1,
-      "--branch": branch,
-    });
+    const authedUrl = this.withCredential(sourceUrl, credential);
+    try {
+      // 浅克隆单分支。注：git clone/fetch 不会拉取远端的 .git/hooks（hooks 是本地态），
+      // 所以正常仓库 clone 出来不带可执行钩子；此处不再配置 core.hooksPath
+      // （加固版 git 会拒绝该配置：需 allowUnsafeHooksPath）。
+      await simpleGit().clone(authedUrl, localPath, {
+        "--depth": 1,
+        "--branch": branch,
+      });
+    } catch (err) {
+      throw this.redact(err, credential);
+    } finally {
+      // clone 会把 authedUrl（含凭据）原样写入 <localPath>/.git/config —— 无论成败，
+      // 只要目录已生成就立刻把 origin 改回明文 URL，避免凭据落盘常驻。
+      if (credential) await this.stripCredentialFromRemote(localPath, sourceUrl);
+    }
     const version = await this.headCommit(localPath);
     return { localPath, version, sourceType: "git" };
   }
 
-  async sync(sourceUrl: string, branch: string, localPath: string): Promise<FetchResult> {
+  async sync(sourceUrl: string, branch: string, localPath: string, credential?: string): Promise<FetchResult> {
     this.validate(sourceUrl);
-    const git = simpleGit(localPath);
-    await git.fetch("origin", branch, { "--depth": 1 });
-    await git.reset(ResetMode.HARD, [`origin/${branch}`]);
-    // Bug 修复（方案 A）：clean 排除 .codegraph/，否则会删掉 codegraph 的索引库，
-    // 导致增量 sync 永远失败、每次回退到全量 clone。
-    await git.clean(CleanOptions.FORCE + CleanOptions.RECURSIVE, ["-e", ".codegraph"]);
-    const version = await this.headCommit(localPath);
-    return { localPath, version, sourceType: "git" };
+    const authedUrl = this.withCredential(sourceUrl, credential);
+    try {
+      const git = simpleGit(localPath);
+      // 私有仓库：先把 origin 指向带凭据的 URL 再 fetch，避免依赖已落盘的旧 remote。
+      await git.remote(["set-url", "origin", authedUrl]);
+      await git.fetch("origin", branch, { "--depth": 1 });
+      await git.reset(ResetMode.HARD, [`origin/${branch}`]);
+      // Bug 修复（方案 A）：clean 排除 .codegraph/，否则会删掉 codegraph 的索引库，
+      // 导致增量 sync 永远失败、每次回退到全量 clone。
+      await git.clean(CleanOptions.FORCE + CleanOptions.RECURSIVE, ["-e", ".codegraph"]);
+      const version = await this.headCommit(localPath);
+      return { localPath, version, sourceType: "git" };
+    } catch (err) {
+      throw this.redact(err, credential);
+    } finally {
+      // 同上：fetch 结束后立刻把 origin 改回明文 URL，避免凭据在 .git/config 落盘常驻。
+      if (credential) await this.stripCredentialFromRemote(localPath, sourceUrl);
+    }
+  }
+
+  /** 把 <localPath>/.git 里的 origin 改回不含凭据的明文 URL（幂等，失败静默忽略）。 */
+  private async stripCredentialFromRemote(localPath: string, plainSourceUrl: string): Promise<void> {
+    try {
+      await simpleGit(localPath).remote(["set-url", "origin", plainSourceUrl]);
+    } catch {
+      // 目录可能还不存在（clone 在写入前就失败）——无残留凭据可清，忽略。
+    }
   }
 
   // ── 内部 helper ──
+
+  /** 在 URL 中注入凭据作为 username（PAT-over-HTTPS，Azure DevOps/GitHub/GitLab 通用）。 */
+  private withCredential(sourceUrl: string, credential?: string): string {
+    if (!credential) return sourceUrl;
+    const url = new URL(sourceUrl);
+    url.username = encodeURIComponent(credential);
+    return url.toString();
+  }
+
+  /**
+   * 凭据落库前的最后防线：git/simple-git 报错信息常回显完整远端 URL，
+   * 若其中含凭据明文，会经 sync_error 一路透传回前端 —— 抛出前替换为 ***。
+   */
+  private redact(err: unknown, credential?: string): Error {
+    const msg = err instanceof Error ? err.message : String(err);
+    const safe = credential ? msg.split(credential).join("***").split(encodeURIComponent(credential)).join("***") : msg;
+    return new Error(safe);
+  }
 
   private async headCommit(localPath: string): Promise<string | null> {
     try {

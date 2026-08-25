@@ -420,7 +420,11 @@ export const enUS = {
   'code.register.urlError':
     'Please enter a valid HTTP(S) Git repository URL ending with .git (e.g. https://gitlab.example.com/namespace/repo.git). No spaces allowed.',
   'code.register.invalidUrl':
-    'Please enter a valid HTTPS Git repository URL ending with .git (e.g. https://gitlab.example.com/namespace/repo.git). No spaces allowed.',
+    'Please enter a valid HTTP(S) Git repository URL (e.g. https://gitlab.example.com/namespace/repo.git or https://dev.azure.com/org/project/_git/repo). No spaces allowed.',
+  'code.register.token': 'Access Token',
+  'code.register.tokenExtra':
+    'Optional — required for private repositories (Azure DevOps, GitHub, GitLab, etc.). Stored encrypted, never shown again.',
+  'code.register.tokenPlaceholder': 'Personal access token',
   'code.register.submitting': 'Registering…',
   'code.register.submit': 'Register',
   'code.confirm.delete': 'Are you sure you want to delete repo "{{name}} ({{branch}}"?',
