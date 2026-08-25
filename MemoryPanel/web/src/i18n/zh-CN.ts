@@ -405,7 +405,11 @@ export const zhCN = {
   'code.register.urlError':
     '请输入合法的 HTTP(S) Git 仓库地址，且必须以 .git 结尾（如 https://gitlab.example.com/namespace/repo.git），不能含空格。',
   'code.register.invalidUrl':
-    '请输入合法的 HTTPS Git 仓库地址，且必须以 .git 结尾（如 https://gitlab.example.com/namespace/repo.git），不能含空格。',
+    '请输入合法的 HTTP(S) Git 仓库地址（如 https://gitlab.example.com/namespace/repo.git 或 https://dev.azure.com/org/project/_git/repo），不能含空格。',
+  'code.register.token': '访问令牌',
+  'code.register.tokenExtra':
+    '可选 —— 私有仓库（Azure DevOps、GitHub、GitLab 等）需要填写。加密存储，注册后不再显示。',
+  'code.register.tokenPlaceholder': '个人访问令牌（Personal Access Token）',
   'code.register.submitting': '注册中…',
   'code.register.submit': '注册',
   'code.confirm.delete': '确定要删除仓库「{{name}} ({{branch}})」吗？',

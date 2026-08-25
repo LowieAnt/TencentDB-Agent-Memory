@@ -48,6 +48,8 @@ export default function CodeSourcesPanel() {
     setFormRepo,
     formBranch,
     setFormBranch,
+    formToken,
+    setFormToken,
     submitting,
     // allocate
     allocateTarget,
@@ -466,6 +468,16 @@ export default function CodeSourcesPanel() {
                       <Alert type="error">{t('code.register.invalidUrl')}</Alert>
                     </Form.Item>
                   )}
+                  <Form.Item label={t('code.register.token')} extra={t('code.register.tokenExtra')}>
+                    <Input
+                      type="password"
+                      size="full"
+                      value={formToken}
+                      onChange={setFormToken}
+                      placeholder={t('code.register.tokenPlaceholder')}
+                      autoComplete="new-password"
+                    />
+                  </Form.Item>
                   <Form.Item label={t('code.register.branch')} required>
                     <Input
                       size="full"

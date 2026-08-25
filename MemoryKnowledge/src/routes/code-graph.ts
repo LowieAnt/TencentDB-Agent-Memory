@@ -189,12 +189,14 @@ export function createCodeGraphRoutes(deps: CodeGraphRouteDeps): Hono {
 
     const branch = typeof body.branch === "string" && body.branch ? body.branch : "main";
     const repoName = typeof body.repo_name === "string" ? body.repo_name : undefined;
+    const credential = typeof body.credential === "string" && body.credential ? body.credential : undefined;
 
     const { row, existed } = cgService.create({
       service_id: idFields.service_id,
       team_id: idFields.team_id,
       repo_url: repoUrl,
       branch,
+      credential,
       repo_name: repoName,
       owner_user_id: idFields.user_id,
       user_id: idFields.user_id,

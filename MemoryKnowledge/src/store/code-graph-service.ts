@@ -28,6 +28,7 @@ import type {
   CountOpts,
 } from "./types.js";
 import { BuildQueue } from "./build-queue.js";
+import { encryptCredential, decryptCredential } from "../crypto/credential-cipher.js";
 
 export interface CodeGraphBuildContext {
   codeGraphId: string;
@@ -35,6 +36,8 @@ export interface CodeGraphBuildContext {
   teamId: string;
   repoUrl: string;
   branch: string;
+  /** 解密后的私有仓库凭据（明文 PAT），公开仓库为 undefined。 */
+  credential?: string;
   /** 该资产的本地工作目录（checkout + 索引落此）。 */
   dir: string;
   /** worker 可调用以更新细粒度内部状态（cloning → indexing）。 */
@@ -87,6 +90,8 @@ export interface CreateCodeGraphParams {
   team_id: string;
   repo_url: string;
   branch: string;
+  /** 私有仓库 access token（明文，本方法内部加密后落库）；公开仓库不传。 */
+  credential?: string;
   repo_name?: string;
   owner_user_id?: string;
   user_id?: string;
@@ -130,7 +135,8 @@ export class CodeGraphService {
    * - 新建 → 入库 pending + 后台建图。
    */
   create(params: CreateCodeGraphParams): { row: CodeGraphRow; existed: boolean } {
-    const { row, existed } = this.store.createCodeGraph(params);
+    const encrypted = params.credential ? encryptCredential(params.credential) : undefined;
+    const { row, existed } = this.store.createCodeGraph({ ...params, credential: encrypted });
     if (!existed) {
       this.audit(row, "create", `clone ${row.repo_url}@${row.branch}`, params.user_id);
       this.enqueueBuild(row);
@@ -268,7 +274,7 @@ export class CodeGraphService {
 
   private enqueueBuild(row: CodeGraphRow): void {
     this.queue.enqueue(row.code_graph_id, () =>
-      this.runBuild(row.service_id, row.code_graph_id, row.team_id, row.repo_url, row.branch),
+      this.runBuild(row.service_id, row.code_graph_id, row.team_id, row.repo_url, row.branch, row.credential),
     );
   }
 
@@ -278,6 +284,7 @@ export class CodeGraphService {
     teamId: string,
     repoUrl: string,
     branch: string,
+    encryptedCredential: string | null,
   ): Promise<void> {
     // 入口检查点：pending 期间被删 → 直接跳过，不置 processing、不建图。
     if (this.isDeleted(serviceId, codeGraphId)) {
@@ -296,6 +303,7 @@ export class CodeGraphService {
         teamId,
         repoUrl,
         branch,
+        credential: encryptedCredential ? decryptCredential(encryptedCredential) : undefined,
         dir: this.dirFor(serviceId, teamId, codeGraphId),
         setInternalStatus: (s) =>
           this.store.updateCodeGraphStatus(serviceId, codeGraphId, { status: "processing", internal_status: s }),
